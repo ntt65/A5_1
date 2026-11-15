@@ -58,6 +58,26 @@ Invoke-Local { uv run --python .venv python -B -X utf8 validate_report.py --refr
 
 `modeling.py --validate` 한 번으로 학습·Train 전용 CV·Test 평가·기본 그림 5개 저장·산출물 검증을 마친다. `predict_credit_score()`는 신용 점수 배열을, `predict_overdue_probability()`는 클래스 1의 확률 배열을 반환한다. 규칙별 적용 건수·TP·FP와 규칙 대비 F1 향상도 함께 출력·저장한다. 보너스 검증은 학습 곡선을, `evaluation.py --validate`는 불균형 처리·앙상블·추론 자원·비용 임계값 비교를 생성한다. [기본 모델 결과](artifacts/metrics.json), [보너스 결과](artifacts/bonus_metrics.json), [보완 실험 결과](artifacts/evaluation_metrics.json)
 
+생성·재사용 성공 메시지 다음 줄에는 `DATA_PATH`의 실제 절대 경로와 KST 실행 시각이 표시된다. 아래 경로·시각은 형식 예시이며 `+09:00`이 한국 표준시의 UTC 오프셋이다. 저장소 루트에서 `uv run --python .venv python -B -X utf8 data_gen.py`를 실행하면 신규 생성 또는 기존 데이터 검증 경로에 해당하는 메시지를 확인할 수 있다.
+
+```text
+Generated finance_data.csv.
+DATA_PATH=D:\git\A5_1\finance_data.csv, timestamp=2026-11-16T00:00:00+09:00
+Samples=10000, overdue_rate=12.0100%
+```
+
+기존 데이터 재사용 시 첫 줄은 `Existing finance_data.csv verified and reused.`이며 같은 형식의 경로·실행 시각·요약이 이어진다. 신규 생성과 재사용 검증은 임시 디렉터리에서도 같은 진입점으로 확인할 수 있다. [생성·재사용 로그](data_gen.py)
+
+개발·검증에는 아래 도구와 고정 의존성을 사용한다. 추가 개발 도구를 도입할 때는 목적·버전·실행 명령을 별도 개발 의존성 명세에 함께 기록한다.
+
+| 도구 | 역할 | 사용 방법 |
+| --- | --- | --- |
+| Python 3.11 | 학습·평가·검증 코드 실행 | `.venv`의 Python 사용 |
+| `uv` | 가상환경·의존성 관리 | `uv pip check --python .venv`로 환경 확인 |
+| `requirements.txt` | 학습·시각화 직접 의존성의 고정 버전 | 위 설치 블록 사용 |
+| 각 스크립트의 `--validate` | 분할·전처리·예측·산출물 검증 | 위 단일 PowerShell 블록 사용 |
+| `validate_report.py` | 문서 수치·링크·API 예제 정합성 | `--refresh --validate` 실행 |
+
 | 단계 | 수행 내용 | 구현·산출물 |
 | --- | --- | --- |
 | 데이터 준비 | 미션 생성 규칙과 기존 CSV 일치 확인 또는 신규 생성 | `data_gen.py` |
@@ -66,6 +86,60 @@ Invoke-Local { uv run --python .venv python -B -X utf8 validate_report.py --refr
 | 설정 선택 | Train CV로 Alpha·RF 파라미터 선택, 검증 예측으로 비용 임계값 선택 | `modeling.py`, `evaluation.py` |
 | 최종 학습·평가 | 전체 Train 재학습 후 원분포 Test 최종 평가, 원본 입력 규칙 비교 | `modeling.py`, `baseline.py`, `evaluation.py` |
 | 저장·대조 | 집계 JSON·PNG 저장 후 README 수치와 근거 연결 확인 | `artifacts/`, `validate_report.py` |
+
+주요 API는 아래 입력·출력을 갖는다. 예제는 같은 Train으로 전처리와 모델을 학습하고 Test에는 학습된 변환을 적용한다.
+
+| import 경로 | 함수 | 역할·입력 | 반환값 | 호출 예시 |
+| --- | --- | --- | --- | --- |
+| `preprocess` | `make_preprocessor()` | 수치형·선택적 범주형 열의 변환기 구성 | 학습 전 `ColumnTransformer` | `preprocessor = make_preprocessor()` |
+| `modeling` | `make_model(estimator)` | 추정기를 공통 전처리와 연결 | 학습 전 `Pipeline` | `model = make_model(LogisticRegression())` |
+| `modeling` | `predict_credit_score(model, features)` | 학습된 회귀 Pipeline과 6개 입력 열 | 행 수와 같은 길이의 신용 점수 배열 | `scores = predict_credit_score(regressor, features)` |
+| `modeling` | `predict_overdue_probability(model, features)` | 학습된 분류 Pipeline과 6개 입력 열 | 행 수와 같은 길이의 클래스 1 확률 배열 | `probabilities = predict_overdue_probability(classifier, features)` |
+
+<!-- api-example:start -->
+```python
+import numpy as np
+from sklearn.linear_model import LogisticRegression, Ridge
+from preprocess import load_data, make_preprocessor, split_data
+from modeling import (
+    CreditScoreRegressor, make_model,
+    predict_credit_score, predict_overdue_probability,
+)
+
+split = split_data(load_data())
+preprocessor = make_preprocessor()
+train_values = preprocessor.fit_transform(split.X_train)
+test_values = preprocessor.transform(split.X_test)
+assert train_values.shape == (len(split.X_train), 6)
+assert test_values.shape == (len(split.X_test), 6)
+assert np.isfinite(train_values).all() and np.isfinite(test_values).all()
+
+regressor = make_model(CreditScoreRegressor(Ridge(alpha=1.0)))
+regressor.fit(split.X_train, split.y_reg_train)
+classifier = make_model(LogisticRegression(
+    class_weight="balanced", random_state=42, max_iter=2000,
+))
+classifier.fit(split.X_train, split.y_cls_train)
+features = split.X_test.iloc[:3]
+scores = predict_credit_score(regressor, features)
+probabilities = predict_overdue_probability(classifier, features)
+assert scores.shape == probabilities.shape == (len(features),)
+assert np.isfinite(scores).all() and np.isfinite(probabilities).all()
+assert ((scores >= 0) & (scores <= 1000)).all()
+assert ((probabilities >= 0) & (probabilities <= 1)).all()
+```
+<!-- api-example:end -->
+
+그림 생성 명령은 저장소 루트에서 `uv run --python .venv python -B -X utf8` 뒤에 아래 스크립트·인자를 붙여 실행한다. 모든 그림은 Agg 백엔드로 파일에 저장한다.
+
+| PNG 저장 경로 | 생성 스크립트 | 생성 함수·코드 위치 | 스크립트·인자 |
+| --- | --- | --- | --- |
+| [ridge_coefficients.png](artifacts/ridge_coefficients.png) | `modeling.py` | [save_coefficient_plot()](modeling.py#L204) | `modeling.py --validate` |
+| [lasso_coefficients.png](artifacts/lasso_coefficients.png) | `modeling.py` | [save_coefficient_plot()](modeling.py#L204) | `modeling.py --validate` |
+| [confusion_matrix.png](artifacts/confusion_matrix.png) | `modeling.py` | [save_classification_plots()](modeling.py#L219) | `modeling.py --validate` |
+| [roc_curves.png](artifacts/roc_curves.png) | `modeling.py` | [save_classification_plots()](modeling.py#L219) | `modeling.py --validate` |
+| [feature_importance.png](artifacts/feature_importance.png) | `modeling.py` | [save_classification_plots()](modeling.py#L219) | `modeling.py --validate` |
+| [learning_curve.png](artifacts/learning_curve.png) | `bonus.py` | [run_bonus()](bonus.py#L26) | `bonus.py --validate` |
 
 ## 재현성과 데이터 누수 방지
 
@@ -83,6 +157,27 @@ Invoke-Local { uv run --python .venv python -B -X utf8 validate_report.py --refr
 | 분류 | 공통 전처리 사용 | 클래스 가중치 또는 비교 실험의 SMOTE, RF의 StratifiedKFold·F1 탐색, 양성 확률과 임계값 판정 |
 | 규칙 | 원본 수치형 입력 사용 | 다섯 `if/elif` 조건과 최종 정상 반환 |
 
+회귀는 학습 폴드 대치·표준화 → Ridge/Lasso → KFold CV RMSE로 Alpha 선택 → 전체 Train 재학습 → 0~1000 신용 점수 예측으로 이어진다. 기본 분류는 학습 폴드 대치·표준화 → 클래스 가중치 LR/RF → RF의 층화 CV F1 탐색 → 전체 Train 재학습 → 양성 확률·임계값 판정으로 이어진다. SMOTE 비교 경로는 각 CV 학습 폴드의 대치·표준화 → SMOTE → LR 순서다. [공통 Pipeline](modeling.py), [SMOTE 비교 Pipeline](evaluation.py)
+
+누수 관련 assert가 실패하면 첫 traceback의 파일·함수·행을 확인하고 해당 스크립트의 `--validate` 명령과 `random_state=42` 설정을 기록한다. 아래 점검 순서로 분할과 fit 범위를 확인한다.
+
+| 점검 순서 | assert 위치 | 확인·수정 방법 |
+| --- | --- | --- |
+| 1 | `evaluation.py`의 `evaluate_folds()` 인덱스 교집합 | Train/Validation/Test 인덱스 교집합을 확인하고 분할 전에 fit한 객체가 있으면 폴드 내부로 옮긴다. |
+| 2 | `modeling.py`의 `validate_preprocessor()`, `evaluation.py`의 scaler 표본 수 | `n_samples_seen_`가 해당 학습 영역의 행 수와 일치하도록 학습 행만 fit에 전달한다. |
+| 3 | 같은 함수들의 imputer 통계 비교 | `statistics_`를 해당 학습 영역의 중앙값과 대조하고 학습·검증용 변환기 공유 시점을 확인한다. |
+| 4 | `modeling.py`의 `validate_search()` | 전처리를 포함한 전체 Pipeline이 CV에 전달되는지, 회귀 KFold·분류 StratifiedKFold 설정을 확인한다. |
+
+재현 명령은 `uv run --python .venv python -B -X utf8 modeling.py --validate`와 `uv run --python .venv python -B -X utf8 evaluation.py --validate`다. 오류 발생 시 첫 실패 지점에서 중단하고 위 항목과 학습 인덱스 범위를 함께 기록한다. [전처리·탐색 검증](modeling.py), [폴드별 누수 검증](evaluation.py)
+
+| 모델 | 파라미터별 후보 수 | 전체 조합 수 | 5-fold 평가 횟수 | 최종 Train 재학습 |
+| --- | --- | --- | --- | --- |
+| Ridge | `alpha=[0.01, 0.1, 1, 10, 100]`, 5개 | 5 | 25 | 1회 |
+| Lasso | `alpha=[0.01, 0.1, 1, 10, 100]`, 5개 | 5 | 25 | 1회 |
+| Random Forest | `n_estimators=[100, 200]` 2개 × `max_depth=[None, 8]` 2개 × `min_samples_leaf=[1, 3, 5]` 3개 | 12 | 60 | 1회 |
+
+모든 `GridSearchCV`는 `verbose=0`이며 탐색별 전체 조합 수는 50개 이하다. 표의 평가 횟수는 후보 수 × 폴드 수이고, 계수 경로용 전체 Train 학습은 별도다. 회귀는 같은 25개 폴드 학습에서 RMSE·MAE를 함께 계산하며 RMSE로 최적 후보를 선택한다. [탐색 설정·조합 수 검증](modeling.py)
+
 ## 분류 성능
 
 행 순서와 수치는 `metrics.json`의 `classification` 결과를 따르며 소수점 4자리로 표시한다.
@@ -94,6 +189,8 @@ Invoke-Local { uv run --python .venv python -B -X utf8 validate_report.py --refr
 | Random Forest | 0.9030 | 0.5697 | 0.7833 | 0.6596 | 0.9423 |
 
 규칙 모델은 최근 연체 3회 이상, 부채비율 0.7 초과, 소득 3000 미만, 카드 7개 초과, 최근 연체 1회 이상이면서 부채비율 0.5 초과의 다섯 조건을 순서대로 적용한다. 해당 조건에 걸리면 1을 반환하고 마지막에 0을 반환한다. 이 0/1 출력을 규칙 AUC와 ROC의 점수로 사용한다. ML 모델의 AUC와 ROC는 `predict_proba`의 양성 확률로 계산한다.
+
+규칙의 우선순위는 반복 연체로 드러나는 상환 부담, 높은 부채비율에 따른 여력 감소, 낮은 소득에 따른 상환 완충 여력, 여러 카드의 잠재 노출, 연체와 부채가 겹치는 위험의 순서다. 이 근거는 합성 미션의 위험 가정이며 여러 조건을 충족하면 첫 조건의 규칙 번호로 예측과 기여도를 귀속한다. README의 1~5번 순서와 `first_matching_rule()`의 주석·`if/elif` 순서가 대응한다. [규칙 우선순위·판단 근거](baseline.py)
 
 | 규칙 | 첫 매칭 조건 | 적용 건수 | TP | FP |
 | --- | --- | --- | --- | --- |
@@ -119,6 +216,8 @@ RF 혼동행렬은 행을 실제값, 열을 예측값으로 하며 양쪽 순서
 
 ![세 모델의 ROC와 AUC](artifacts/roc_curves.png)
 
+양성 클래스가 약 12%일 때 F1은 `2 × Precision × Recall / (Precision + Recall)`로 두 지표의 조화평균을 구하므로 오탐·미탐을 함께 살필 수 있다. Precision은 `TP/(TP+FP)`, Recall은 `TP/(TP+FN)`이며 어느 한쪽이 낮으면 F1도 낮아진다. ROC-AUC는 임계값 전반의 양성·음성 점수 순위 구분력을 평가한다. 운영에서는 Recall·Precision과 FP/FN 비용을 함께 보고 업무 손실에 맞는 임계값을 정한다. [분류 지표](artifacts/metrics.json), [업무 비용·임계값](artifacts/evaluation_metrics.json)
+
 ## 회귀 성능과 규제
 
 수치는 `metrics.json`의 `regression` 결과이며 소수점 4자리로 표시한다. CV 선택과 최종 RMSE·MAE·R²는 모두 정상 예측 진입점이 0~1000으로 clipping하여 반환하는 신용 점수에 근거한다.
@@ -138,9 +237,13 @@ Lasso는 Alpha 1에서 나이·소비 점수·카드 개수의 계수가 0이 �
 
 Ridge 그림에서 Alpha 0.01→100에 따라 연소득 계수는 58.0144→57.2983, 최근 연체 계수는 -35.8708→-35.4231로 변한다. L2 규제를 강화하면 주요 계수의 절댓값이 완만하게 줄어든다.
 
+가로축 `Alpha`는 규제 강도를 로그 척도로 표시하고 세로축 `Coefficient (standardized features)`는 Train 평균·표준편차로 표준화한 입력의 계수다. 타깃은 원래 신용 점수 척도를 사용하므로 계수 단위는 입력 1표준편차당 신용 점수 변화량이다. 계수는 clipping 전 선형 예측의 기울기이며 예측 반환 단계에서 0~1000 clipping을 적용한다. [계수 그림 생성](modeling.py)
+
 ![Lasso Alpha별 계수 변화](artifacts/lasso_coefficients.png)
 
 Lasso 그림에서 Alpha 1은 나이·소비 점수·카드 개수의 계수를 0으로 만들며, Alpha 100에서는 6개 계수가 모두 0이 된다. L1 규제의 변수 선택과 강한 축소를 보여준다.
+
+Lasso도 로그 척도의 가로축 `Alpha`와 세로축 `Coefficient (standardized features)`를 사용한다. 입력 표준화는 Train 기준이며 계수 단위는 입력 1표준편차당 신용 점수 변화량이다. 범례는 동일한 6개 입력 특성에 대응한다.
 
 | Alpha | Ridge CV RMSE 평균 ± 표준편차 | Lasso CV RMSE 평균 ± 표준편차 |
 | --- | --- | --- |
@@ -152,6 +255,18 @@ Lasso 그림에서 Alpha 1은 나이·소비 점수·카드 개수의 계수를 
 
 표의 RMSE는 같은 5개 Train CV 검증 폴드에서 계산한 평균과 표준편차다. Ridge는 Alpha 0.01~10에서 평균 RMSE가 29.5838~29.5839로 가깝고, 반올림 전 평균이 가장 낮은 Alpha 1을 선택했다. Lasso는 Alpha 0.1의 평균 RMSE 29.5774가 가장 낮으며, Alpha 10에서 34.2606, 모든 계수가 0인 Alpha 100에서 79.6935로 증가한다. 강한 규제로 예측 관계가 축소되면서 과소적합이 커지는 양상이다. Alpha 선택과 최종 Test 성능을 각각의 표에서 확인할 수 있다. [Alpha별 원점수·평균·표준편차](artifacts/metrics.json)
 
+<!-- alpha-mae:start -->
+| Alpha | Ridge CV MAE 평균 ± 표준편차 | Lasso CV MAE 평균 ± 표준편차 |
+| --- | --- | --- |
+| 0.01 | 23.5129 ± 0.3996 | 23.5125 ± 0.3998 |
+| 0.1 | 23.5129 ± 0.3996 | 23.5097 ± 0.4023 |
+| 1 | 23.5130 ± 0.3998 | 23.5464 ± 0.4351 |
+| 10 | 23.5135 ± 0.4015 | 27.4512 ± 0.7717 |
+| 100 | 23.5351 ± 0.4156 | 63.9819 ± 0.9603 |
+
+동일한 Train 5-fold에서 RMSE와 MAE를 함께 측정했다. Ridge는 Alpha 0.01→10에서 MAE가 23.5129→23.5135로 변했다. Lasso는 Alpha 0.1→10→100에서 MAE가 23.5097→27.4512→63.9819로 변해 강한 규제의 영향을 보여준다. 두 오차의 단위는 신용 점수이며, Alpha는 CV RMSE로 선택하고 선택 모델의 Test RMSE·MAE는 위 표에 보고했다. [Alpha별 MAE 원점수·집계](artifacts/metrics.json)
+<!-- alpha-mae:end -->
+
 ## 특징 중요도
 
 ![Random Forest 특징 중요도](artifacts/feature_importance.png)
@@ -162,17 +277,19 @@ Lasso 그림에서 Alpha 1은 나이·소비 점수·카드 개수의 계수를 
 
 ## 불균형 처리 비교
 
+**SMOTE는 각 CV 학습 폴드 내부에서만 적용하며, 검증·Test는 원래 표본 구성과 클래스 비율로 평가한다.** 합성 표본은 학습 분포와 예측확률에 영향을 줄 수 있으므로 원래 분포의 검증 예측에서 Precision·Recall·F1·AUC와 비용을 함께 확인한다.
+
 `evaluation.py`는 Train 8,000건을 같은 5개 층화 폴드로 나누고 LR의 무보정·`class_weight="balanced"`·SMOTE를 비교한다. 각 폴드의 학습 영역에서 전처리 통계를 구하고, SMOTE는 전처리→SMOTE→분류기를 묶은 `imblearn.pipeline.Pipeline`의 학습 단계에서만 적용한다. 검증 영역과 Test는 원본 표본을 유지한다. 학습시간에는 전처리와 SMOTE가 포함된다. [비교 구현](evaluation.py), [비교 결과](artifacts/evaluation_metrics.json)
 
 | 처리 | CV Precision | CV Recall | CV F1 | CV AUC | 평균 학습시간(초) |
 | --- | --- | --- | --- | --- | --- |
-| 무보정 | 0.7295 | 0.5401 | 0.6201 | 0.9537 | 0.0105 |
-| 클래스 가중치 | 0.4992 | 0.9189 | 0.6467 | 0.9538 | 0.0110 |
-| SMOTE | 0.5135 | 0.9043 | 0.6548 | 0.9538 | 0.0198 |
+| 무보정 | 0.7295 | 0.5401 | 0.6201 | 0.9537 | 0.0135 |
+| 클래스 가중치 | 0.4992 | 0.9189 | 0.6467 | 0.9538 | 0.0144 |
+| SMOTE | 0.5135 | 0.9043 | 0.6548 | 0.9538 | 0.0233 |
 
 수치는 동일한 5개 검증 폴드의 평균이며, 폴드별 원점수와 표준편차는 JSON에 저장한다. SMOTE의 CV F1은 0.6548로 클래스 가중치의 0.6467보다 0.0082 높다. 클래스 가중치는 Recall 0.9189, SMOTE는 0.9043으로 연체 탐지율과 Precision·F1 사이에 절충이 있다. 클래스 가중치는 원본 표본 수를 유지하고, SMOTE는 합성 표본 생성과 이웃 계산을 포함하므로 학습시간도 함께 비교한다. [불균형 비교 원점수](artifacts/evaluation_metrics.json)
 
-파라미터 탐색에 SMOTE를 연결할 때도 전체 Pipeline을 `GridSearchCV`에 전달한다. 다음 예시는 이웃 수 5인 한 조합을 5-fold CV로 비교하는 구성이다.
+**SMOTE 예제의 표본 합성은 각 CV 학습 폴드에서 수행하고, 검증·Test에는 학습된 변환과 예측을 적용한다.** 파라미터 탐색에 SMOTE를 연결할 때도 전체 Pipeline을 `GridSearchCV`에 전달한다. 다음 예시는 이웃 수 5인 한 조합을 5-fold CV로 비교하는 구성이다.
 
 ```python
 from imblearn.over_sampling import SMOTE
@@ -205,7 +322,11 @@ search = GridSearchCV(
 | Decision Tree | 0.6910 ± 0.0134 | 0.5531 ± 0.0110 | 0.1379 |
 | Random Forest | 0.7904 ± 0.0037 | 0.6757 ± 0.0256 | 0.1147 |
 
-RF는 단일 트리보다 Validation F1이 0.5531→0.6757로 높고 Train−Validation 격차는 0.1379→0.1147로 작았다. 검증 F1의 폴드 간 표준편차는 0.0110→0.0256으로 커졌다. 이 실험에서는 검증 성능과 일반화 격차의 개선을 관찰했으며, 폴드 점수의 변동과 이론적 예측 분산은 구분해 해석한다. RF 파라미터는 이전 Train CV 선택값을 고정한 조건부 비교이며, 편향·분산의 직접 분해량은 측정하지 않았다. [동일 폴드 비교 원점수](artifacts/evaluation_metrics.json)
+RF는 단일 트리보다 Validation F1이 0.5531→0.6757로 높고 Train−Validation 격차는 0.1379→0.1147로 작았다.
+
+<!-- fold-dispersion:start -->
+같은 5개 검증 폴드에서 F1 표준편차는 단일 트리 0.0110에서 RF 0.0256로 0.0147 증가했다. 표준편차는 np.std(ddof=0)으로 계산했다. RF의 검증 평균과 Train−Validation 격차는 개선되었고, 폴드 점수 변동은 위 수치로 관찰된다. RF 파라미터는 기존 Train CV 선택값을 고정한 조건부 비교이며, 이론적 편향·분산의 직접 분해에는 별도 반복 표본 실험이 필요하다. [동일 폴드 비교 원점수](artifacts/evaluation_metrics.json)
+<!-- fold-dispersion:end -->
 
 ## 운영 선택과 비용 임계값
 
@@ -224,12 +345,42 @@ RF는 단일 트리보다 Validation F1이 0.5531→0.6757로 높고 Train−Val
 
 | 모델 | 단일 요청 p95(ms) | 일괄 처리량(건/초) | 직렬화 모델 크기(bytes) | Python 추적 추론 최대 할당(bytes) |
 | --- | --- | --- | --- | --- |
-| Logistic Regression | 1.9597 | 142131.4161 | 2793 | 117623 |
-| Random Forest | 10.3244 | 17606.2392 | 8477926 | 112764 |
+| Logistic Regression | 2.8984 | 96960.5151 | 2793 | 117681 |
+| Random Forest | 17.0334 | 11484.2753 | 8477926 | 112765 |
 
 벤치마크는 Windows AMD64·Python 3.11.4에서 Train 입력을 사용하고 전처리를 포함했다. 5회 워밍업 후 단일 요청 100건의 p95와 256건 묶음 10회의 중앙 처리시간으로 처리량을 계산했다. Python 추적 최대 할당은 `tracemalloc`으로 256건 묶음 3회를 측정한 값이며, 네이티브 할당과 프로세스 전체 RSS는 측정 범위 밖이다. 직렬화 모델 크기는 pickle 바이트 수다. 시간·할당 값은 재실행 시 환경 부하에 따라 변할 수 있다.
 
 이번 운영 가정은 단일 요청 p95 100ms 이하와 직렬화 모델 크기 10MiB 이하이며 두 모델이 충족했다. 제약을 만족한 후보 중 Train OOF 비용이 LR 1,627단위, RF 1,735단위여서 LR과 임계값 0.46을 선택했다. 동률이면 OOF FN, p95 지연시간, 모델 이름 순서로 결정한다. 이 선택은 미탐 손실을 크게 두는 예시 목적에 따른 것이며, F1 균형을 우선하는 업무에서는 RF의 기본 F1과 다른 비용·제약을 함께 검토할 수 있다. [측정 환경·운영 가정·선택 결과](artifacts/evaluation_metrics.json)
+
+<!-- operating-cases:start -->
+| 업무 사례 | 후보 모델 | 임계값 | Train OOF 비용 | Train OOF Recall | p95(ms) | 모델 크기(bytes) | 선택 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 연체 미탐 비용 우선 사전심사 | Logistic Regression | 0.46 | 1627 | 0.9324 | 2.8984 | 2793 | 채택 |
+| 연체 미탐 비용 우선 사전심사 | Random Forest | 0.21 | 1735 | 0.9459 | 17.0334 | 8477926 | 비교 후보 |
+| 응답시간 우선 대량 요청 | Logistic Regression | 0.46 | 1627 | 0.9324 | 2.8984 | 2793 | 채택 |
+| 응답시간 우선 대량 요청 | Random Forest | 0.21 | 1735 | 0.9459 | 17.0334 | 8477926 | 비교 후보 |
+
+두 사례 모두 예시 한도인 p95 100ms·직렬화 모델 10MiB를 적용한다. 사전심사는 한도를 만족하는 후보의 Train OOF 비용을 우선하고, 대량 요청은 적격 후보 중 p95·모델 크기 순서로 선택한다. 비용은 FP 1·FN 10의 가정이며 임계값은 Train OOF에서 확정했다. 측정 환경과 반복 횟수는 위 벤치마크 설명을 따른다. [운영 한도·실측값·선택 근거](artifacts/evaluation_metrics.json)
+<!-- operating-cases:end -->
+
+비용 민감도는 예시 FP/FN 비율 `1:5`, `1:10`, `1:20`을 같은 Train OOF 확률·임계값 후보에 적용한 결과다. 각 비용 비율의 임계값을 먼저 확정한 뒤 Test의 FP·FN·Precision·Recall·비용을 평가했다. Train OOF 비용은 임계값 선택에 사용한 튜닝 점수이며, 아래 기본 0.5 결과와 비용 선택 결과를 같은 비용 비율 안에서 비교한다. 비용 비율은 업무 가정이다. [비율별 전체 후보·선택·최종 평가](artifacts/evaluation_metrics.json)
+
+<!-- cost-sensitivity:start -->
+| FP:FN | 모델 | 기준 | 임계값 | Train OOF 비용 | Test FP | Test FN | Test Precision | Test Recall | Test 비용 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1:5 | Logistic Regression | 기본 | 0.50 | 1279 | 213 | 30 | 0.4965 | 0.8750 | 363 |
+| 1:5 | Logistic Regression | 비용 선택 | 0.50 | 1279 | 213 | 30 | 0.4965 | 0.8750 | 363 |
+| 1:5 | Random Forest | 기본 | 0.50 | 1431 | 142 | 52 | 0.5697 | 0.7833 | 402 |
+| 1:5 | Random Forest | 비용 선택 | 0.42 | 1340 | 175 | 39 | 0.5346 | 0.8375 | 370 |
+| 1:10 | Logistic Regression | 기본 | 0.50 | 1669 | 213 | 30 | 0.4965 | 0.8750 | 513 |
+| 1:10 | Logistic Regression | 비용 선택 | 0.46 | 1627 | 232 | 24 | 0.4821 | 0.9000 | 472 |
+| 1:10 | Random Forest | 기본 | 0.50 | 2266 | 142 | 52 | 0.5697 | 0.7833 | 662 |
+| 1:10 | Random Forest | 비용 선택 | 0.21 | 1735 | 308 | 21 | 0.4156 | 0.9125 | 518 |
+| 1:20 | Logistic Regression | 기본 | 0.50 | 2449 | 213 | 30 | 0.4965 | 0.8750 | 813 |
+| 1:20 | Logistic Regression | 비용 선택 | 0.27 | 1999 | 381 | 10 | 0.3764 | 0.9583 | 581 |
+| 1:20 | Random Forest | 기본 | 0.50 | 3936 | 142 | 52 | 0.5697 | 0.7833 | 1182 |
+| 1:20 | Random Forest | 비용 선택 | 0.11 | 2140 | 438 | 8 | 0.3463 | 0.9667 | 598 |
+<!-- cost-sensitivity:end -->
 
 ## 결과의 적용 범위와 검증
 
