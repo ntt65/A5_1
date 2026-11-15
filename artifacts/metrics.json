@@ -1,0 +1,830 @@
+{
+  "regression": {
+    "ridge": {
+      "alpha": 1.0,
+      "rmse": 30.125949462414,
+      "mae": 23.932791225275782,
+      "r2": 0.8611837508895207,
+      "prediction_method": "actual predict_credit_score return values clipped to [0, 1000]",
+      "cv": {
+        "splitter": "KFold",
+        "n_splits": 5,
+        "shuffle": true,
+        "random_state": 42,
+        "scoring": "neg_root_mean_squared_error",
+        "verbose": 0,
+        "candidate_count": 5,
+        "training_samples": 8000,
+        "preprocessing_inside_pipeline": true,
+        "best_parameters": {
+          "model__estimator__alpha": 1.0
+        },
+        "best_score": -29.58381714610179,
+        "candidates": [
+          {
+            "parameters": {
+              "model__estimator__alpha": 0.01
+            },
+            "mean_score": -29.583826063695607,
+            "std_score": 0.5088066983458644,
+            "fold_scores": [
+              -29.41908603578828,
+              -30.312362076249,
+              -29.197264374041367,
+              -30.029709311642513,
+              -28.9607085207569
+            ],
+            "rank": 3
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 0.1
+            },
+            "mean_score": -29.583825069345085,
+            "std_score": 0.5088260370137833,
+            "fold_scores": [
+              -29.41906260018016,
+              -30.312382671922904,
+              -29.1972735623766,
+              -30.02973441007898,
+              -28.960672102166757
+            ],
+            "rank": 2
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 1.0
+            },
+            "mean_score": -29.58381714610179,
+            "std_score": 0.5090193960310314,
+            "fold_scores": [
+              -29.418830286694284,
+              -30.31259060239049,
+              -29.197367486463374,
+              -30.02998733503092,
+              -28.960310019929885
+            ],
+            "rank": 1
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 10.0
+            },
+            "mean_score": -29.58393930979537,
+            "std_score": 0.5109501998950863,
+            "fold_scores": [
+              -29.416710795017494,
+              -30.314866640708544,
+              -29.198510154931093,
+              -30.032710012292412,
+              -28.9568989460273
+            ],
+            "rank": 4
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 100.0
+            },
+            "mean_score": -29.604677747437194,
+            "std_score": 0.5299609038241856,
+            "fold_scores": [
+              -29.41527044526053,
+              -30.35666939954622,
+              -29.22964119127814,
+              -30.078656754999717,
+              -28.943150946101348
+            ],
+            "rank": 5
+          }
+        ]
+      },
+      "coefficient_path": {
+        "alphas": [
+          0.01,
+          0.1,
+          1.0,
+          10.0,
+          100.0
+        ],
+        "features": [
+          "age",
+          "annual_income",
+          "spending_score",
+          "debt_ratio",
+          "credit_card_count",
+          "overdue_count_6m"
+        ],
+        "coefficients": [
+          [
+            -0.22928966959234723,
+            58.014412077540335,
+            -0.16891009168362311,
+            -28.783341478237684,
+            0.17048212804010915,
+            -35.87081588118547
+          ],
+          [
+            -0.2293003389891228,
+            58.013759463588315,
+            -0.16890399905466785,
+            -28.783021126644527,
+            0.17048712309115172,
+            -35.8704078210007
+          ],
+          [
+            -0.2294070032205565,
+            58.00723413202489,
+            -0.16884308535004744,
+            -28.779818002739503,
+            0.1705370590922073,
+            -35.866327729754055
+          ],
+          [
+            -0.2304706776907409,
+            57.9420615111953,
+            -0.16823520461697897,
+            -28.74782591800748,
+            0.17103497098524295,
+            -35.82557781298435
+          ],
+          [
+            -0.2408163291507479,
+            57.29830514517936,
+            -0.16227988248856468,
+            -28.431772754050176,
+            0.1758720509530718,
+            -35.423114615177695
+          ]
+        ],
+        "fit_samples": 8000
+      }
+    },
+    "lasso": {
+      "alpha": 0.1,
+      "rmse": 30.12842802488953,
+      "mae": 23.929690289295916,
+      "r2": 0.8611609081970342,
+      "prediction_method": "actual predict_credit_score return values clipped to [0, 1000]",
+      "cv": {
+        "splitter": "KFold",
+        "n_splits": 5,
+        "shuffle": true,
+        "random_state": 42,
+        "scoring": "neg_root_mean_squared_error",
+        "verbose": 0,
+        "candidate_count": 5,
+        "training_samples": 8000,
+        "preprocessing_inside_pipeline": true,
+        "best_parameters": {
+          "model__estimator__alpha": 0.1
+        },
+        "best_score": -29.577381846941982,
+        "candidates": [
+          {
+            "parameters": {
+              "model__estimator__alpha": 0.01
+            },
+            "mean_score": -29.583138044037703,
+            "std_score": 0.5094220591395934,
+            "fold_scores": [
+              -29.41769055351798,
+              -30.312163318469455,
+              -29.196189981413077,
+              -30.03025553972885,
+              -28.95939082705916
+            ],
+            "rank": 2
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 0.1
+            },
+            "mean_score": -29.577381846941982,
+            "std_score": 0.5147217331242544,
+            "fold_scores": [
+              -29.40495354324017,
+              -30.310096428869922,
+              -29.1874439141007,
+              -30.036050143816187,
+              -28.948365204682936
+            ],
+            "rank": 1
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 1.0
+            },
+            "mean_score": -29.609043724281015,
+            "std_score": 0.5642586924610173,
+            "fold_scores": [
+              -29.38784845555904,
+              -30.385758525067004,
+              -29.207280797919328,
+              -30.151234131480216,
+              -28.913096711379502
+            ],
+            "rank": 3
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 10.0
+            },
+            "mean_score": -34.26058950830523,
+            "std_score": 0.923829587342161,
+            "fold_scores": [
+              -33.69022592164221,
+              -35.2467971067521,
+              -34.031661472348745,
+              -35.37118896241038,
+              -32.96307407837272
+            ],
+            "rank": 4
+          },
+          {
+            "parameters": {
+              "model__estimator__alpha": 100.0
+            },
+            "mean_score": -79.69347469853655,
+            "std_score": 0.9758441233171685,
+            "fold_scores": [
+              -78.50693924236317,
+              -80.90783446449655,
+              -80.08381781776848,
+              -80.38965972452552,
+              -78.57912224352901
+            ],
+            "rank": 5
+          }
+        ]
+      },
+      "coefficient_path": {
+        "alphas": [
+          0.01,
+          0.1,
+          1.0,
+          10.0,
+          100.0
+        ],
+        "features": [
+          "age",
+          "annual_income",
+          "spending_score",
+          "debt_ratio",
+          "credit_card_count",
+          "overdue_count_6m"
+        ],
+        "coefficients": [
+          [
+            -0.21961224463053702,
+            58.00482807422612,
+            -0.1587762401822656,
+            -28.772900526014496,
+            0.16068127358843134,
+            -35.861060568587966
+          ],
+          [
+            -0.13246345214786423,
+            57.91790184842432,
+            -0.06737865895042068,
+            -28.67859570807199,
+            0.07247756253116125,
+            -35.772858693281385
+          ],
+          [
+            -0.0,
+            57.02370160586872,
+            -0.0,
+            -27.77734804267326,
+            0.0,
+            -34.86787123774943
+          ],
+          [
+            -0.0,
+            48.04458070637754,
+            0.0,
+            -18.813297183180595,
+            0.0,
+            -25.790000793221516
+          ],
+          [
+            -0.0,
+            0.0,
+            0.0,
+            -0.0,
+            0.0,
+            -0.0
+          ]
+        ],
+        "fit_samples": 8000
+      }
+    }
+  },
+  "classification": {
+    "rule_based": {
+      "accuracy": 0.51,
+      "precision": 0.19011725293132328,
+      "recall": 0.9458333333333333,
+      "f1": 0.31659693165969316,
+      "auc": 0.6982007575757576,
+      "threshold": 0.5,
+      "zero_division": 0,
+      "roc_auc": 0.6982007575757576,
+      "roc_point_count": 3,
+      "score_method": "binary 0/1 rule predictions used as AUC scores",
+      "rule_count": 5
+    },
+    "logistic_regression": {
+      "accuracy": 0.8785,
+      "precision": 0.49645390070921985,
+      "recall": 0.875,
+      "f1": 0.6334841628959276,
+      "auc": 0.9504569128787878,
+      "threshold": 0.5,
+      "zero_division": 0,
+      "roc_auc": 0.9504569128787878,
+      "roc_point_count": 222,
+      "score_method": "positive class 1 predict_proba",
+      "class_weight": "balanced"
+    },
+    "random_forest": {
+      "accuracy": 0.903,
+      "precision": 0.5696969696969697,
+      "recall": 0.7833333333333333,
+      "f1": 0.6596491228070176,
+      "auc": 0.9423011363636363,
+      "threshold": 0.5,
+      "zero_division": 0,
+      "roc_auc": 0.9423011363636363,
+      "roc_point_count": 346,
+      "score_method": "positive class 1 predict_proba",
+      "class_weight": "balanced",
+      "best_parameters": {
+        "model__max_depth": null,
+        "model__min_samples_leaf": 5,
+        "model__n_estimators": 200
+      },
+      "cv_score": 0.6756553899444857,
+      "cv": {
+        "splitter": "StratifiedKFold",
+        "n_splits": 5,
+        "shuffle": true,
+        "random_state": 42,
+        "scoring": "f1",
+        "verbose": 0,
+        "candidate_count": 12,
+        "training_samples": 8000,
+        "preprocessing_inside_pipeline": true,
+        "best_parameters": {
+          "model__max_depth": null,
+          "model__min_samples_leaf": 5,
+          "model__n_estimators": 200
+        },
+        "best_score": 0.6756553899444857,
+        "candidates": [
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 1,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.5721569869684092,
+            "std_score": 0.03632019204537358,
+            "fold_scores": [
+              0.5674157303370787,
+              0.5365853658536586,
+              0.6130952380952381,
+              0.6144578313253012,
+              0.5292307692307693
+            ],
+            "rank": 12
+          },
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 1,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.5748836481373749,
+            "std_score": 0.03400455570204935,
+            "fold_scores": [
+              0.5609065155807366,
+              0.5405405405405406,
+              0.6071428571428571,
+              0.6231454005934718,
+              0.5426829268292683
+            ],
+            "rank": 11
+          },
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 3,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.6745687653481852,
+            "std_score": 0.022518672634610007,
+            "fold_scores": [
+              0.6428571428571429,
+              0.6771300448430493,
+              0.7009345794392523,
+              0.6962616822429907,
+              0.6556603773584906
+            ],
+            "rank": 2
+          },
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 3,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.673564012548603,
+            "std_score": 0.02318719452504364,
+            "fold_scores": [
+              0.6351351351351351,
+              0.6818181818181818,
+              0.691415313225058,
+              0.6990740740740741,
+              0.660377358490566
+            ],
+            "rank": 3
+          },
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 5,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.6728338119208257,
+            "std_score": 0.024401554415998655,
+            "fold_scores": [
+              0.640495867768595,
+              0.6611226611226612,
+              0.7071583514099783,
+              0.694560669456067,
+              0.6608315098468271
+            ],
+            "rank": 4
+          },
+          {
+            "parameters": {
+              "model__max_depth": null,
+              "model__min_samples_leaf": 5,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.6756553899444857,
+            "std_score": 0.025606785036693287,
+            "fold_scores": [
+              0.650103519668737,
+              0.6597510373443983,
+              0.7043478260869566,
+              0.7091295116772823,
+              0.654945054945055
+            ],
+            "rank": 1
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 1,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.6633229369376001,
+            "std_score": 0.02117340349976256,
+            "fold_scores": [
+              0.6442687747035574,
+              0.6444007858546169,
+              0.698744769874477,
+              0.676056338028169,
+              0.6531440162271805
+            ],
+            "rank": 8
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 1,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.6647979923709116,
+            "std_score": 0.01945427870591735,
+            "fold_scores": [
+              0.6456692913385826,
+              0.6495049504950495,
+              0.6943866943866944,
+              0.6814516129032258,
+              0.6529774127310062
+            ],
+            "rank": 5
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 3,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.6641157060840298,
+            "std_score": 0.019170443812042234,
+            "fold_scores": [
+              0.6459143968871596,
+              0.6446601941747573,
+              0.6860706860706861,
+              0.6881287726358148,
+              0.6558044806517311
+            ],
+            "rank": 6
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 3,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.6636019179206928,
+            "std_score": 0.023075946107375747,
+            "fold_scores": [
+              0.6447876447876448,
+              0.6407766990291263,
+              0.691358024691358,
+              0.692,
+              0.6490872210953347
+            ],
+            "rank": 7
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 5,
+              "model__n_estimators": 100
+            },
+            "mean_score": 0.6600276206910343,
+            "std_score": 0.025369272727773604,
+            "fold_scores": [
+              0.6384615384615384,
+              0.6347992351816444,
+              0.6937119675456389,
+              0.6877470355731226,
+              0.6454183266932271
+            ],
+            "rank": 10
+          },
+          {
+            "parameters": {
+              "model__max_depth": 8,
+              "model__min_samples_leaf": 5,
+              "model__n_estimators": 200
+            },
+            "mean_score": 0.6623657529507362,
+            "std_score": 0.026013887755908748,
+            "fold_scores": [
+              0.64,
+              0.64,
+              0.6977687626774848,
+              0.6903353057199211,
+              0.6437246963562753
+            ],
+            "rank": 9
+          }
+        ]
+      },
+      "confusion_matrix": [
+        [
+          1618,
+          142
+        ],
+        [
+          52,
+          188
+        ]
+      ],
+      "confusion_matrix_labels": [
+        0,
+        1
+      ]
+    }
+  },
+  "data": {
+    "samples": 10000,
+    "train_samples": 8000,
+    "test_samples": 2000,
+    "random_state": 42,
+    "stratify": "is_overdue",
+    "features": [
+      "age",
+      "annual_income",
+      "spending_score",
+      "debt_ratio",
+      "credit_card_count",
+      "overdue_count_6m"
+    ],
+    "excluded_targets": [
+      "credit_score",
+      "is_overdue"
+    ],
+    "train_overdue_rate": 0.120125,
+    "test_overdue_rate": 0.12
+  },
+  "plots": [
+    "artifacts/ridge_coefficients.png",
+    "artifacts/lasso_coefficients.png",
+    "artifacts/confusion_matrix.png",
+    "artifacts/roc_curves.png",
+    "artifacts/feature_importance.png"
+  ],
+  "feature_importance": [
+    {
+      "feature": "age",
+      "importance": 0.04233037915249199
+    },
+    {
+      "feature": "annual_income",
+      "importance": 0.4916176811235701
+    },
+    {
+      "feature": "spending_score",
+      "importance": 0.04933558842637006
+    },
+    {
+      "feature": "debt_ratio",
+      "importance": 0.16652086727497303
+    },
+    {
+      "feature": "credit_card_count",
+      "importance": 0.024533171519717175
+    },
+    {
+      "feature": "overdue_count_6m",
+      "importance": 0.22566231250287766
+    }
+  ],
+  "validation": {
+    "status": "passed",
+    "features": 6,
+    "shared_test_samples": 2000,
+    "train_only_preprocessing": true,
+    "cv_pipeline_and_folds": {
+      "ridge": {
+        "passed": true,
+        "candidate_count": 5,
+        "fold_sizes": [
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          }
+        ]
+      },
+      "lasso": {
+        "passed": true,
+        "candidate_count": 5,
+        "fold_sizes": [
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          }
+        ]
+      },
+      "random_forest": {
+        "passed": true,
+        "candidate_count": 12,
+        "fold_sizes": [
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          },
+          {
+            "train": 6400,
+            "validation": 1600
+          }
+        ]
+      }
+    },
+    "prediction_ranges": {
+      "ridge": {
+        "count": 2000,
+        "finite": true,
+        "min": 109.20995406473094,
+        "max": 620.0764157550176,
+        "allowed_range": [
+          0.0,
+          1000.0
+        ],
+        "passed": true
+      },
+      "lasso": {
+        "count": 2000,
+        "finite": true,
+        "min": 109.71687341968624,
+        "max": 619.2524262961133,
+        "allowed_range": [
+          0.0,
+          1000.0
+        ],
+        "passed": true
+      },
+      "rule_based": {
+        "count": 2000,
+        "finite": true,
+        "min": 0.0,
+        "max": 1.0,
+        "allowed_range": [
+          0.0,
+          1.0
+        ],
+        "passed": true
+      },
+      "logistic_regression": {
+        "count": 2000,
+        "finite": true,
+        "min": 1.7134908697263208e-07,
+        "max": 0.9999788956085013,
+        "allowed_range": [
+          0.0,
+          1.0
+        ],
+        "passed": true
+      },
+      "random_forest": {
+        "count": 2000,
+        "finite": true,
+        "min": 0.0,
+        "max": 0.96762602386506,
+        "allowed_range": [
+          0.0,
+          1.0
+        ],
+        "passed": true
+      }
+    },
+    "metrics_recomputed": true,
+    "roc_auc_matches": true,
+    "confusion_matrix_count": 2000,
+    "png_files": {
+      "artifacts/ridge_coefficients.png": {
+        "passed": true,
+        "bytes": 50752
+      },
+      "artifacts/lasso_coefficients.png": {
+        "passed": true,
+        "bytes": 73952
+      },
+      "artifacts/confusion_matrix.png": {
+        "passed": true,
+        "bytes": 30726
+      },
+      "artifacts/roc_curves.png": {
+        "passed": true,
+        "bytes": 79459
+      },
+      "artifacts/feature_importance.png": {
+        "passed": true,
+        "bytes": 34227
+      }
+    },
+    "feature_importance": "passed",
+    "json_contract": "passed"
+  }
+}
