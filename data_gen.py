@@ -1,5 +1,6 @@
 """Generate the mission dataset without replacing existing source data."""
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -56,6 +57,10 @@ def main() -> None:
     else:
         expected.to_csv(DATA_PATH, index=False, mode="x")
         print("Generated finance_data.csv.")
+    timestamp = datetime.now(timezone(timedelta(hours=9), name="KST")).isoformat(
+        timespec="seconds"
+    )
+    print(f"DATA_PATH={DATA_PATH.resolve()}, timestamp={timestamp}")
     print(f"Samples={len(expected)}, overdue_rate={expected['is_overdue'].mean():.4%}")
 
 
