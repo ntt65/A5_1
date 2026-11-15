@@ -91,6 +91,8 @@ Invoke-Local { uv run --python .venv python -B -X utf8 modeling.py --validate }
 
 양성이 12%인 Test에서는 다수 클래스의 정답이 Accuracy에 크게 기여하므로 Precision·Recall·F1·AUC를 함께 해석한다. `class_weight='balanced'`는 클래스 빈도에 반비례하는 가중치를 적용해 소수 클래스의 학습 기여를 높인다.
 
+리샘플링은 소수 클래스 표본을 늘리거나 다수 클래스 표본을 줄여 학습 분포를 조정하는 방식이다. SMOTE는 소수 클래스의 이웃 표본 사이를 보간해 합성 표본을 만든다. 리샘플링을 적용할 때는 각 CV 학습 폴드 내부에서 수행해 검증·Test 데이터로 정보가 유입되는 것을 방지한다. 이번 실험은 원본 표본을 유지하고 클래스 가중치로 불균형을 처리했다.
+
 규칙 대비 Logistic Regression의 F1은 0.3169 증가했고 상대 개선율은 100.09%다. Random Forest의 F1은 0.3431 증가했고 상대 개선율은 108.36%다. 개선율은 반올림 전 지표로 `(ML F1 / 규칙 F1 - 1) × 100`을 계산했다. RF의 F1과 Precision이 가장 높고, LR의 AUC가 가장 높다. 규칙 모델은 Recall 0.9458과 Precision 0.1901을 기록하여 넓은 위험 판정 범위에 따른 오탐이 많다. RF의 Recall은 0.7833, LR은 0.8750으로 규칙 모델보다 낮아 탐지율의 절충이 있다.
 
 RF 혼동행렬은 행을 실제값, 열을 예측값으로 하며 양쪽 순서는 `[0, 1]`이다. TN 1,618건, FP 142건, FN 52건, TP 188건이며 합계는 Test 2,000건이다.
@@ -150,3 +152,13 @@ Lasso는 Alpha 1에서 나이·소비 점수·카드 개수의 계수가 0이 �
 | `AGENTS.md`, `log_history.md` | 공통 운영 규칙과 KST 기준 작업 완료 이력 |
 
 선행 로컬 커밋은 데이터 생성·전처리 `0c22f17`, 모델링 `d796c6c`다. 문서화 커밋은 `docs: report`이며 README·계획·완료 이력을 포함한다. 실행·산출물 계약은 [통합 계획](plans/A5_1.md), 작업 기록은 [완료 이력](log_history.md)에서 확인할 수 있다.
+
+## 보너스 과제
+
+필수 구현·리포트와 계획의 로컬 작업 1~3은 완료했으며, 미션 5절의 보너스 과제 진행 상태는 다음과 같다.
+
+| 보너스 항목 | 상태 | 구현 근거 또는 남은 작업 |
+| --- | --- | --- |
+| Custom Transformer | 미구현 | `BaseEstimator`를 상속하고 `fit`·`transform`을 제공하는 사용자 정의 전처리 클래스 구현이 남아 있다. |
+| 모듈화 | 완료 | 데이터 생성은 `data_gen.py`, 전처리는 `preprocess.py`·`src/preprocess.py`, 규칙 예측은 `baseline.py`, 학습·평가는 `modeling.py`로 분리했다. 위 실행 순서의 CLI로 각 단계를 실행할 수 있다. |
+| Learning Curve 분석 | 미구현 | 학습 데이터 크기별 Train·Validation 성능을 계산하고 학습 곡선을 저장한 뒤 편향·분산을 해석하는 작업이 남아 있다. |
