@@ -8,11 +8,14 @@ from typing import Sequence
 
 import numpy as np
 import pandas as pd
+from sklearn.base import BaseEstimator, OneToOneFeatureMixin, TransformerMixin, clone
 from sklearn.compose import ColumnTransformer
+from sklearn.exceptions import NotFittedError
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.utils.validation import check_is_fitted, validate_data
 
 FEATURE_COLUMNS = (
     "age",
@@ -25,6 +28,27 @@ FEATURE_COLUMNS = (
 TARGET_COLUMNS = ("credit_score", "is_overdue")
 RANDOM_STATE = 42
 DATA_PATH = Path(__file__).resolve().parents[1] / "finance_data.csv"
+
+
+class TrainingMedianImputer(OneToOneFeatureMixin, TransformerMixin, BaseEstimator):
+    """Fill numeric missing values using medians learned during fit."""
+
+    def fit(self, X, y=None):
+        values = validate_data(self, X, dtype=np.float64, ensure_all_finite="allow-nan")
+        self.statistics_ = pd.DataFrame(values).median().fillna(0.0).to_numpy()
+        return self
+
+    def transform(self, X):
+        check_is_fitted(self, "statistics_")
+        values = validate_data(
+            self, X, reset=False, dtype=np.float64, ensure_all_finite="allow-nan"
+        )
+        return np.where(np.isnan(values), self.statistics_, values)
+
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.input_tags.allow_nan = True
+        return tags
 
 
 @dataclass(frozen=True)
@@ -77,7 +101,7 @@ def make_preprocessor(
     """Return an unfitted transformer suitable for use inside a CV pipeline."""
     numeric = Pipeline(
         [
-            ("imputer", SimpleImputer(strategy="median", keep_empty_features=True)),
+            ("imputer", TrainingMedianImputer()),
             ("scaler", StandardScaler()),
         ]
     )
@@ -158,6 +182,29 @@ def validate_pipeline(path: str | Path = DATA_PATH) -> dict:
     assert np.array_equal(fixture_encoder.categories_[0], fixture_categories), "Category test refit."
     assert (fixture_test_values[:, 2:] == 0).all(), "Unknown category encoding."
 
+    # Verify the custom transformer's estimator contract and empty-column handling.
+    imputer = TrainingMedianImputer()
+    try:
+        imputer.transform([[np.nan, np.nan]])
+    except NotFittedError:
+        pass
+    else:
+        raise AssertionError("Unfitted custom imputer accepted transform.")
+    empty_fixture = pd.DataFrame({"value": [1.0, np.nan, 5.0], "empty": [np.nan] * 3})
+    imputed = imputer.fit_transform(empty_fixture)
+    expected = SimpleImputer(strategy="median", keep_empty_features=True).fit_transform(empty_fixture)
+    np.testing.assert_array_equal(imputed, expected)
+    np.testing.assert_array_equal(imputer.statistics_, [3.0, 0.0])
+    assert list(imputer.get_feature_names_out()) == list(empty_fixture), "Custom feature mapping."
+    validation_fixture = pd.DataFrame({"value": [np.nan, 100.0], "empty": [np.nan, 8.0]})
+    np.testing.assert_array_equal(imputer.transform(validation_fixture), [[3.0, 0.0], [100.0, 8.0]])
+    np.testing.assert_array_equal(imputer.statistics_, [3.0, 0.0])
+    cloned_imputer = clone(imputer)
+    assert not hasattr(cloned_imputer, "statistics_"), "Clone retained fitted state."
+    cloned_imputer.fit(validation_fixture)
+    np.testing.assert_array_equal(cloned_imputer.statistics_, [100.0, 8.0])
+    np.testing.assert_array_equal(imputer.statistics_, [3.0, 0.0])
+
     return {
         "samples": len(frame),
         "features": len(FEATURE_COLUMNS),
@@ -166,6 +213,7 @@ def validate_pipeline(path: str | Path = DATA_PATH) -> dict:
         "overdue_rate": overall_rate,
         "train_overdue_rate": float(split.y_cls_train.mean()),
         "test_overdue_rate": float(split.y_cls_test.mean()),
+        "custom_transformer": "passed",
         "validation": "passed",
     }
 
