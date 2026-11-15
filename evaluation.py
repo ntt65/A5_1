@@ -33,12 +33,15 @@ ROOT = Path(__file__).resolve().parent
 METRICS_PATH = "artifacts/evaluation_metrics.json"
 FP_COST = 1
 FN_COST = 10
+SENSITIVITY_FN_COSTS = (5, 10, 20)
 SINGLE_REQUEST_LIMIT_MS = 100.0
 SERIALIZED_MODEL_LIMIT_BYTES = 10 * 1024 * 1024
 THRESHOLDS = np.append(np.linspace(0.0, 1.0, 101), np.nextafter(1.0, np.inf))
 
 
-def classification_cost(target, probabilities, threshold: float) -> dict:
+def classification_cost(
+    target, probabilities, threshold: float, fp_cost: int = FP_COST, fn_cost: int = FN_COST,
+) -> dict:
     predictions = probabilities >= threshold
     tn, fp, fn, tp = confusion_matrix(target, predictions, labels=[0, 1]).ravel()
     return {
@@ -48,7 +51,7 @@ def classification_cost(target, probabilities, threshold: float) -> dict:
         "recall": float(recall_score(target, predictions, zero_division=0)),
         "f1": float(f1_score(target, predictions, zero_division=0)),
         "auc": float(roc_auc_score(target, probabilities)),
-        "cost": int(fp * FP_COST + fn * FN_COST),
+        "cost": int(fp * fp_cost + fn * fn_cost),
     }
 
 
@@ -171,25 +174,30 @@ def benchmark_model(model, training) -> dict:
     }
 
 
-def choose_threshold(target, probabilities) -> dict:
-    candidates = [classification_cost(target, probabilities, value) for value in THRESHOLDS]
+def choose_threshold(target, probabilities, fp_cost: int = FP_COST, fn_cost: int = FN_COST) -> dict:
+    candidates = [
+        classification_cost(target, probabilities, value, fp_cost, fn_cost)
+        for value in THRESHOLDS
+    ]
     selected = min(candidates, key=lambda row: (row["cost"], row["fn"], row["fp"], row["threshold"]))
     return {
         "selected_threshold": selected["threshold"],
         "oof_selected": selected,
-        "oof_default": classification_cost(target, probabilities, 0.5),
+        "oof_default": classification_cost(target, probabilities, 0.5, fp_cost, fn_cost),
         "threshold_candidates": candidates,
     }
 
 
-def validate_record(record: dict, target, probabilities) -> None:
+def validate_record(
+    record: dict, target, probabilities, fp_cost: int = FP_COST, fn_cost: int = FN_COST,
+) -> None:
     """Check metric arithmetic independently against the confusion counts."""
     tn, fp, fn, tp = confusion_matrix(
         target, probabilities >= record["threshold"], labels=[0, 1]
     ).ravel()
     assert [record[field] for field in ("tn", "fp", "fn", "tp")] == [tn, fp, fn, tp]
     assert tn + fp + fn + tp == len(target)
-    assert record["cost"] == int(fp * FP_COST + fn * FN_COST)
+    assert record["cost"] == int(fp * fp_cost + fn * fn_cost)
     expected_precision = tp / (tp + fp) if tp + fp else 0.0
     expected_recall = tp / (tp + fn) if tp + fn else 0.0
     expected_f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.0
@@ -235,10 +243,22 @@ def run_evaluation() -> dict:
     }
     benchmarks = {name: benchmark_model(model, split.X_train) for name, model in fitted_models.items()}
     source_names = {"logistic_regression": "balanced", "random_forest": "random_forest"}
-    threshold_selection = {
-        name: choose_threshold(split.y_cls_train, oof_probabilities[source_names[name]])
-        for name in fitted_models
-    }
+    sensitivity_scenarios = [
+        {
+            "fp_cost": FP_COST,
+            "fn_cost": fn_cost,
+            "models": {
+                name: choose_threshold(
+                    split.y_cls_train, oof_probabilities[source_names[name]], FP_COST, fn_cost
+                )
+                for name in fitted_models
+            },
+        }
+        for fn_cost in SENSITIVITY_FN_COSTS
+    ]
+    threshold_selection = next(
+        scenario["models"] for scenario in sensitivity_scenarios if scenario["fn_cost"] == FN_COST
+    )
     eligible = [name for name in fitted_models if benchmarks[name]["meets_assumed_limits"]]
     decision = {
         "status": "no_candidate_meets_assumed_limits",
@@ -261,21 +281,34 @@ def run_evaluation() -> dict:
 
     # Model and threshold selection are complete before reading Test outcomes.
     for name, model in fitted_models.items():
-        selected = threshold_selection[name]
         probabilities = predict_overdue_probability(model, split.X_test)
         assert probabilities.shape == (len(split.X_test),) and np.isfinite(probabilities).all()
         assert ((probabilities >= 0) & (probabilities <= 1)).all()
-        selected["test_default"] = classification_cost(split.y_cls_test, probabilities, 0.5)
-        selected["test_selected"] = classification_cost(
-            split.y_cls_test, probabilities, selected["selected_threshold"]
-        )
-        for field in ("test_default", "test_selected"):
-            validate_record(selected[field], split.y_cls_test, probabilities)
-        for field in ("oof_default", "oof_selected"):
-            validate_record(selected[field], split.y_cls_train, oof_probabilities[source_names[name]])
-        assert selected["oof_selected"]["cost"] == min(
-            record["cost"] for record in selected["threshold_candidates"]
-        )
+        for scenario in sensitivity_scenarios:
+            selected = scenario["models"][name]
+            fp_cost, fn_cost = scenario["fp_cost"], scenario["fn_cost"]
+            selected["test_default"] = classification_cost(
+                split.y_cls_test, probabilities, 0.5, fp_cost, fn_cost
+            )
+            selected["test_selected"] = classification_cost(
+                split.y_cls_test, probabilities, selected["selected_threshold"], fp_cost, fn_cost
+            )
+            for field in ("test_default", "test_selected"):
+                validate_record(selected[field], split.y_cls_test, probabilities, fp_cost, fn_cost)
+            oof = oof_probabilities[source_names[name]]
+            for field in ("oof_default", "oof_selected"):
+                validate_record(selected[field], split.y_cls_train, oof, fp_cost, fn_cost)
+            candidates = selected["threshold_candidates"]
+            np.testing.assert_array_equal([row["threshold"] for row in candidates], THRESHOLDS)
+            for record in candidates:
+                validate_record(record, split.y_cls_train, oof, fp_cost, fn_cost)
+            assert selected["oof_selected"] == min(
+                candidates,
+                key=lambda row: (row["cost"], row["fn"], row["fp"], row["threshold"]),
+            )
+            assert selected["selected_threshold"] == selected["oof_selected"]["threshold"]
+            assert selected["oof_default"]["threshold"] == selected["test_default"]["threshold"] == 0.5
+        selected = threshold_selection[name]
         for metric in ("precision", "recall", "f1", "auc"):
             assert np.isclose(selected["test_default"][metric], original["classification"][name][metric])
 
@@ -303,12 +336,21 @@ def run_evaluation() -> dict:
         },
         "benchmarks": benchmarks,
         "threshold_selection": threshold_selection,
+        "cost_sensitivity": {
+            "selection_basis": "minimum Train OOF cost on the same probabilities and threshold candidates",
+            "cost_units": "hypothetical relative units",
+            "tie_break": ["cost", "fn", "fp", "threshold"],
+            "test_used_for_selection": False,
+            "scenarios": sensitivity_scenarios,
+        },
         "operating_decision": decision,
         "validation": {
             "status": "passed", "train_test_disjoint": True,
             "oof_coverage_once": True, "fold_only_preprocessing_and_smote": True,
             "validation_samples_unchanged": True, "cost_and_metrics_recomputed": True,
             "thresholds_selected_without_test": True, "test_default_matches_existing_metrics": True,
+            "cost_sensitivity_same_oof_and_threshold_candidates": True,
+            "cost_sensitivity_arithmetic_and_optima_recomputed": True,
         },
     }
     output = ROOT / METRICS_PATH

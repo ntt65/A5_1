@@ -20,15 +20,20 @@ RULE_DESCRIPTIONS = (
 
 
 def first_matching_rule(row: Mapping[str, float]) -> int:
-    """Return the first matching rule number, or zero for the normal default."""
+    """Return the first matching rule under the synthetic mission's risk assumptions."""
+    # Priority 1: repeated recent arrears indicate repayment stress.
     if row["overdue_count_6m"] >= 3:
         return 1
+    # Priority 2: a high debt ratio indicates limited repayment capacity.
     elif row["debt_ratio"] > 0.7:
         return 2
+    # Priority 3: low income indicates a smaller repayment buffer.
     elif row["annual_income"] < 3000:
         return 3
+    # Priority 4: many credit cards indicate potential exposure across accounts.
     elif row["credit_card_count"] > 7:
         return 4
+    # Priority 5: recent arrears combined with elevated debt indicate joint risk.
     elif row["overdue_count_6m"] >= 1 and row["debt_ratio"] > 0.5:
         return 5
     return 0

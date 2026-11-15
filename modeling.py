@@ -97,24 +97,32 @@ def summarize_cv(search: GridSearchCV) -> dict:
     results = search.cv_results_
     candidates = []
     for index, parameters in enumerate(results["params"]):
-        candidates.append(
-            {
-                "parameters": parameters,
-                "mean_score": float(results["mean_test_score"][index]),
-                "std_score": float(results["std_test_score"][index]),
-                "fold_scores": [
-                    float(results[f"split{fold}_test_score"][index])
+        candidate = {
+            "parameters": parameters,
+            "mean_score": float(results["mean_test_score"][index]),
+            "std_score": float(results["std_test_score"][index]),
+            "fold_scores": [
+                float(results[f"split{fold}_test_score"][index])
+                for fold in range(search.n_splits_)
+            ],
+            "rank": int(results["rank_test_score"][index]),
+        }
+        if "mean_test_mae" in results:
+            candidate.update({
+                "mean_mae": -float(results["mean_test_mae"][index]),
+                "std_mae": float(results["std_test_mae"][index]),
+                "fold_mae": [
+                    -float(results[f"split{fold}_test_mae"][index])
                     for fold in range(search.n_splits_)
                 ],
-                "rank": int(results["rank_test_score"][index]),
-            }
-        )
+            })
+        candidates.append(candidate)
     return {
         "splitter": type(search.cv).__name__,
         "n_splits": search.n_splits_,
         "shuffle": search.cv.shuffle,
         "random_state": search.cv.random_state,
-        "scoring": search.scoring,
+        "scoring": search.scoring[search.refit] if search.multimetric_ else search.scoring,
         "verbose": search.verbose,
         "candidate_count": len(candidates),
         "training_samples": int(
@@ -132,7 +140,8 @@ def fit_regression(estimator: BaseEstimator, split: DataSplit) -> tuple:
         make_model(CreditScoreRegressor(estimator)),
         {"model__estimator__alpha": ALPHAS},
         cv=KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE),
-        scoring="neg_root_mean_squared_error",
+        scoring={"score": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error"},
+        refit="score",
         verbose=0,
         n_jobs=1,
         error_score="raise",
@@ -265,7 +274,9 @@ def validate_search(search: GridSearchCV, split: DataSplit, regression: bool) ->
     assert len(candidates) <= 50 and all(len(values) <= 5 for values in search.param_grid.values())
     assert search.cv_results_["params"] == candidates, "CV candidate coverage."
     if regression:
-        assert type(search.cv) is KFold and search.scoring == "neg_root_mean_squared_error"
+        assert type(search.cv) is KFold
+        assert search.scoring == {"score": "neg_root_mean_squared_error", "mae": "neg_mean_absolute_error"}
+        assert search.refit == "score", "Regression selection must use CV RMSE."
         assert search.param_grid == {"model__estimator__alpha": ALPHAS}
     else:
         assert type(search.cv) is StratifiedKFold and search.scoring == "f1"
@@ -289,6 +300,14 @@ def validate_search(search: GridSearchCV, split: DataSplit, regression: bool) ->
     assert np.isfinite(search.cv_results_["std_test_score"]).all(), "Nonfinite CV deviations."
     for fold in range(5):
         assert np.isfinite(search.cv_results_[f"split{fold}_test_score"]).all(), "Nonfinite fold score."
+    if regression:
+        mae_scores = np.asarray([
+            search.cv_results_[f"split{fold}_test_mae"] for fold in range(search.n_splits_)
+        ], dtype=float)
+        assert mae_scores.shape == (5, len(candidates))
+        assert np.isfinite(mae_scores).all() and (mae_scores <= 0).all(), "Invalid negative MAE."
+        np.testing.assert_allclose(search.cv_results_["mean_test_mae"], mae_scores.mean(axis=0))
+        np.testing.assert_allclose(search.cv_results_["std_test_mae"], mae_scores.std(axis=0))
     return {"passed": True, "candidate_count": len(candidates), "fold_sizes": fold_sizes}
 
 
@@ -360,6 +379,8 @@ def validate_results(metrics: dict, split: DataSplit, models: dict, searches: di
         np.testing.assert_allclose([record[field] for field in ("rmse", "mae", "r2")], expected)
         assert np.isfinite([record["alpha"], *expected]).all(), "Nonfinite regression metrics."
         assert record["alpha"] == searches[name].best_params_["model__estimator__alpha"]
+        assert all({"mean_mae", "std_mae", "fold_mae"} <= candidate.keys()
+                   for candidate in record["cv"]["candidates"]), "Missing Alpha CV MAE."
         assert coefficients[name].shape == (5, 6) and np.isfinite(coefficients[name]).all()
         wrapper = models[name]["model"]
         np.testing.assert_array_equal(wrapper.predict(np.zeros((1, 6))),
@@ -410,6 +431,13 @@ def validate_json_contract(metrics: dict) -> None:
         assert {"alpha", "rmse", "mae", "r2", "cv", "prediction_method"} <= record.keys()
         assert all(np.isfinite(record[field]) for field in ("alpha", "rmse", "mae", "r2"))
         assert record["cv"]["candidate_count"] == 5
+        for candidate in record["cv"]["candidates"]:
+            if "mean_mae" in candidate:
+                fold_mae = np.asarray(candidate["fold_mae"], dtype=float)
+                assert fold_mae.shape == (5,) and np.isfinite(fold_mae).all()
+                assert (fold_mae >= 0).all() and np.isfinite(candidate["std_mae"])
+                assert np.isclose(candidate["mean_mae"], fold_mae.mean())
+                assert np.isclose(candidate["std_mae"], fold_mae.std())
     for record in metrics["classification"].values():
         assert all(np.isfinite(record[field]) for field in ("accuracy", "precision", "recall", "f1", "auc"))
         assert record["threshold"] == THRESHOLD and record["zero_division"] == 0
