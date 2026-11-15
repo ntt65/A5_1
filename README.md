@@ -157,8 +157,36 @@ Lasso는 Alpha 1에서 나이·소비 점수·카드 개수의 계수가 0이 �
 
 필수 구현·리포트와 계획의 로컬 작업 1~3은 완료했으며, 미션 5절의 보너스 과제 진행 상태는 다음과 같다.
 
-| 보너스 항목 | 상태 | 구현 근거 또는 남은 작업 |
+| 보너스 항목 | 상태 | 구현 근거 |
 | --- | --- | --- |
-| Custom Transformer | 미구현 | `BaseEstimator`를 상속하고 `fit`·`transform`을 제공하는 사용자 정의 전처리 클래스 구현이 남아 있다. |
+| Custom Transformer | 완료 | `src/preprocess.py`의 `TrainingMedianImputer`를 수치형 전처리 Pipeline에 연결했다. Train 중앙값 대치·전체 결측 열 처리·clone·특성 이름 대응을 검증했다. |
 | 모듈화 | 완료 | 데이터 생성은 `data_gen.py`, 전처리는 `preprocess.py`·`src/preprocess.py`, 규칙 예측은 `baseline.py`, 학습·평가는 `modeling.py`로 분리했다. 위 실행 순서의 CLI로 각 단계를 실행할 수 있다. |
-| Learning Curve 분석 | 미구현 | 학습 데이터 크기별 Train·Validation 성능을 계산하고 학습 곡선을 저장한 뒤 편향·분산을 해석하는 작업이 남아 있다. |
+| Learning Curve 분석 | 완료 | `bonus.py`에서 Train 내부 5-fold CV로 학습 크기별 F1을 계산하고 `artifacts/learning_curve.png`와 `artifacts/bonus_metrics.json`에 결과를 저장한다. |
+
+### Custom Transformer
+
+`TrainingMedianImputer`는 `BaseEstimator`·`TransformerMixin`·`OneToOneFeatureMixin`을 상속한다. `fit`에서 학습 입력의 열별 중앙값을 `statistics_`에 저장하고, `transform`에서 결측값을 채운다. 학습 입력 전체가 결측인 열의 대치값은 0이다. 특성 이름·순서·차원을 검사하며, 새로 clone한 객체는 다시 학습한다. 수치형 Pipeline의 대치 단계로 사용하므로 모델 선택과 학습 곡선의 각 학습 폴드에서 중앙값을 계산한다.
+
+### Learning Curve
+
+기존 환경에서 다음 명령을 실행하면 Custom Transformer 검증과 학습 곡선 생성을 함께 수행한다.
+
+```powershell
+Invoke-Local { uv run --python .venv python -B -X utf8 bonus.py --validate }
+```
+
+분석 모델은 `class_weight='balanced'`인 Logistic Regression이며 하이퍼파라미터를 고정했다. Train 8,000건 내부에서 `StratifiedKFold(n_splits=5, shuffle=True, random_state=42)`를 사용한다. 각 폴드의 학습 영역 6,400건에 10%·25%·50%·75%·100%를 적용하고 검증 영역은 1,600건으로 유지한다. 전체 전처리 Pipeline을 각 부분집합에 fit하며 Test 2,000건은 이 분석에서 사용한 표본 수가 0이다. 아래 수치는 5개 폴드의 평균이고, 그림의 음영은 평균 ±1 표준편차다. 원점수·평균·표준편차·두 곡선의 격차는 별도 결과 파일에 기록한다. [보너스 결과](artifacts/bonus_metrics.json)
+
+| 폴드별 학습 표본 수 | Train F1 | Validation F1 |
+| --- | --- | --- |
+| 640 | 0.6409 | 0.6418 |
+| 1600 | 0.6394 | 0.6477 |
+| 3200 | 0.6490 | 0.6451 |
+| 4800 | 0.6469 | 0.6442 |
+| 6400 | 0.6472 | 0.6467 |
+
+![Logistic Regression 학습 곡선](artifacts/learning_curve.png)
+
+- 최대 학습 크기에서 Train F1은 0.6472, Validation F1은 0.6467이며 격차는 약 0.0006이다. 두 곡선이 가까워 이 설정에서 과대적합에 따른 성능 격차는 작다.
+- Validation F1은 학습 크기에 따라 0.6418~0.6477 범위에서 변한다. 비슷한 수준에서 정체되는 모양은 현재 선형 모델·특징과 생성 라벨의 잡음이 성능을 제한할 가능성을 보여준다.
+- 학습 크기가 늘면서 Train 점수의 폴드별 표준편차는 줄어든다. Validation의 변동 폭은 유지되어 학습 크기 증가에 따른 안정화와 검증 표본 구성에 따른 분산을 함께 관찰할 수 있다.
