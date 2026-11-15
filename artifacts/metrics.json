@@ -331,7 +331,51 @@
       "roc_auc": 0.6982007575757576,
       "roc_point_count": 3,
       "score_method": "binary 0/1 rule predictions used as AUC scores",
-      "rule_count": 5
+      "rule_count": 5,
+      "rule_contributions": {
+        "attribution": "first matching if/elif condition",
+        "rules": [
+          {
+            "rule_number": 1,
+            "condition": "overdue_count_6m >= 3",
+            "applied": 26,
+            "tp": 16,
+            "fp": 10
+          },
+          {
+            "rule_number": 2,
+            "condition": "debt_ratio > 0.7",
+            "applied": 594,
+            "tp": 130,
+            "fp": 464
+          },
+          {
+            "rule_number": 3,
+            "condition": "annual_income < 3000",
+            "applied": 198,
+            "tp": 62,
+            "fp": 136
+          },
+          {
+            "rule_number": 4,
+            "condition": "credit_card_count > 7",
+            "applied": 275,
+            "tp": 7,
+            "fp": 268
+          },
+          {
+            "rule_number": 5,
+            "condition": "overdue_count_6m >= 1 and debt_ratio > 0.5",
+            "applied": 101,
+            "tp": 12,
+            "fp": 89
+          }
+        ],
+        "default_normal_count": 806,
+        "positive_predictions": 1194,
+        "tp": 227,
+        "fp": 967
+      }
     },
     "logistic_regression": {
       "accuracy": 0.8785,
@@ -631,6 +675,23 @@
     "artifacts/roc_curves.png",
     "artifacts/feature_importance.png"
   ],
+  "f1_comparison": {
+    "evaluation_set": "Test",
+    "baseline_model": "rule_based",
+    "baseline_f1": 0.31659693165969316,
+    "models": {
+      "logistic_regression": {
+        "f1": 0.6334841628959276,
+        "absolute_gain": 0.3168872312362344,
+        "relative_gain_percent": 100.0916937428987
+      },
+      "random_forest": {
+        "f1": 0.6596491228070176,
+        "absolute_gain": 0.34305219114732444,
+        "relative_gain_percent": 108.35613262230468
+      }
+    }
+  },
   "feature_importance": [
     {
       "feature": "age",
@@ -825,6 +886,8 @@
       }
     },
     "feature_importance": "passed",
+    "rule_contributions": "passed",
+    "f1_improvement": "passed",
     "json_contract": "passed"
   }
 }

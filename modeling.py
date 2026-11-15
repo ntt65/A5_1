@@ -33,7 +33,7 @@ from sklearn.model_selection import GridSearchCV, KFold, ParameterGrid, Stratifi
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
 
-from baseline import RULE_COUNT, SCORE_DESCRIPTION, predict_rules
+from baseline import RULE_COUNT, SCORE_DESCRIPTION, predict_rules, summarize_rule_contributions
 from preprocess import (
     FEATURE_COLUMNS,
     RANDOM_STATE,
@@ -163,6 +163,28 @@ def evaluate_classification(target: pd.Series, scores: np.ndarray) -> tuple:
     record["roc_auc"] = float(auc(fpr, tpr))
     record["roc_point_count"] = len(fpr)
     return record, (fpr, tpr), predictions
+
+
+def compare_classification_f1(classification: dict) -> dict:
+    """Compare ML models against the rule model on their shared Test set."""
+    baseline_f1 = classification["rule_based"]["f1"]
+    comparisons = {}
+    for name in ("logistic_regression", "random_forest"):
+        model_f1 = classification[name]["f1"]
+        relative_gain = None
+        if baseline_f1 != 0:
+            relative_gain = (model_f1 / baseline_f1 - 1) * 100
+        comparisons[name] = {
+            "f1": model_f1,
+            "absolute_gain": model_f1 - baseline_f1,
+            "relative_gain_percent": relative_gain,
+        }
+    return {
+        "evaluation_set": "Test",
+        "baseline_model": "rule_based",
+        "baseline_f1": baseline_f1,
+        "models": comparisons,
+    }
 
 
 def save_figure(figure, relative_path: str) -> None:
@@ -303,6 +325,33 @@ def validate_results(metrics: dict, split: DataSplit, models: dict, searches: di
         ranges[name] = {"count": len(values), "finite": True, "min": float(values.min()),
                         "max": float(values.max()), "allowed_range": [0.0, upper], "passed": True}
     assert set(np.unique(predictions["rule_based"])) <= {0, 1}, "Nonbinary rule scores."
+    contributions = metrics["classification"]["rule_based"]["rule_contributions"]
+    rules = contributions["rules"]
+    assert len(rules) == RULE_COUNT, "Rule contribution count."
+    assert [rule["rule_number"] for rule in rules] == list(range(1, RULE_COUNT + 1))
+    assert all(rule["applied"] == rule["tp"] + rule["fp"] for rule in rules)
+    rule_positive = predictions["rule_based"] == 1
+    target_positive = split.y_cls_test.to_numpy() == 1
+    assert sum(rule["applied"] for rule in rules) == int(rule_positive.sum())
+    assert contributions["default_normal_count"] + int(rule_positive.sum()) == len(split.X_test)
+    assert contributions["positive_predictions"] == int(rule_positive.sum())
+    assert contributions["tp"] == sum(rule["tp"] for rule in rules) == int((rule_positive & target_positive).sum())
+    assert contributions["fp"] == sum(rule["fp"] for rule in rules) == int((rule_positive & ~target_positive).sum())
+    assert contributions == summarize_rule_contributions(split.X_test, split.y_cls_test)
+    comparison = metrics["f1_comparison"]
+    baseline_f1 = metrics["classification"]["rule_based"]["f1"]
+    assert comparison["baseline_f1"] == baseline_f1
+    for name, improvement in comparison["models"].items():
+        model_f1 = metrics["classification"][name]["f1"]
+        assert improvement["f1"] == model_f1
+        assert np.isclose(improvement["absolute_gain"], model_f1 - baseline_f1)
+        if baseline_f1 == 0:
+            assert improvement["relative_gain_percent"] is None
+        else:
+            assert np.isclose(improvement["relative_gain_percent"], (model_f1 / baseline_f1 - 1) * 100)
+    zero_baseline = {name: {"f1": 0.0} for name in ("rule_based", "logistic_regression", "random_forest")}
+    assert all(record["relative_gain_percent"] is None
+               for record in compare_classification_f1(zero_baseline)["models"].values())
     for name in ("ridge", "lasso"):
         record = metrics["regression"][name]
         values = predictions[name]
@@ -347,7 +396,8 @@ def validate_results(metrics: dict, split: DataSplit, models: dict, searches: di
             "train_only_preprocessing": True, "cv_pipeline_and_folds": cv_checks,
             "prediction_ranges": ranges, "metrics_recomputed": True, "roc_auc_matches": True,
             "confusion_matrix_count": int(matrix.sum()), "png_files": png_checks,
-            "feature_importance": "passed"}
+            "feature_importance": "passed", "rule_contributions": "passed",
+            "f1_improvement": "passed"}
 
 
 def validate_json_contract(metrics: dict) -> None:
@@ -370,6 +420,16 @@ def validate_json_contract(metrics: dict) -> None:
     assert np.asarray(forest["confusion_matrix"]).shape == (2, 2)
     assert sum(map(sum, forest["confusion_matrix"])) == 2000
     assert metrics["classification"]["rule_based"]["score_method"] == SCORE_DESCRIPTION
+    contributions = metrics["classification"]["rule_based"].get("rule_contributions")
+    if contributions is not None:
+        assert len(contributions["rules"]) == RULE_COUNT
+        assert contributions["positive_predictions"] + contributions["default_normal_count"] == 2000
+        assert contributions["tp"] + contributions["fp"] == contributions["positive_predictions"]
+    comparison = metrics.get("f1_comparison")
+    if comparison is not None:
+        assert comparison["evaluation_set"] == "Test" and comparison["baseline_model"] == "rule_based"
+        assert set(comparison["models"]) == {"logistic_regression", "random_forest"}
+        assert comparison == compare_classification_f1(metrics["classification"])
     assert metrics["data"]["features"] == list(FEATURE_COLUMNS)
     assert metrics["data"]["train_samples"] == 8000 and metrics["data"]["test_samples"] == 2000
     assert metrics["data"]["random_state"] == RANDOM_STATE
@@ -427,6 +487,9 @@ def run_modeling() -> dict:
         record["score_method"] = SCORE_DESCRIPTION if name == "rule_based" else "positive class 1 predict_proba"
         metrics["classification"][name] = record
     metrics["classification"]["rule_based"]["rule_count"] = RULE_COUNT
+    metrics["classification"]["rule_based"]["rule_contributions"] = summarize_rule_contributions(
+        split.X_test, split.y_cls_test)
+    metrics["f1_comparison"] = compare_classification_f1(metrics["classification"])
     metrics["classification"]["logistic_regression"]["class_weight"] = "balanced"
     forest = metrics["classification"]["random_forest"]
     forest.update({"class_weight": "balanced", "best_parameters": searches["random_forest"].best_params_,
@@ -457,6 +520,9 @@ def main() -> None:
     parser.add_argument("--validate", action="store_true", required=True)
     parser.parse_args()
     metrics = run_modeling()
+    for rule in metrics["classification"]["rule_based"]["rule_contributions"]["rules"]:
+        print(f"Rule {rule['rule_number']} | applied={rule['applied']} TP={rule['tp']} FP={rule['fp']}"
+              f" | {rule['condition']}")
     print(json.dumps({
         "classification": {name: {field: record[field] for field in ("accuracy", "precision", "recall", "f1", "auc")}
                            for name, record in metrics["classification"].items()},
@@ -464,6 +530,7 @@ def main() -> None:
                        for name, record in metrics["regression"].items()},
         "random_forest_best_parameters": metrics["classification"]["random_forest"]["best_parameters"],
         "random_forest_cv_f1": metrics["classification"]["random_forest"]["cv_score"],
+        "f1_comparison": metrics["f1_comparison"],
         "validation": metrics["validation"]["status"], "plots": metrics["plots"],
     }, ensure_ascii=False))
 
