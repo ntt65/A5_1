@@ -5,3 +5,4 @@
 2026-11-16 00:28 KST | unknown | README 필수·보너스 구분: 필수 결과·지표·그림 5개·CLI 검증, 리샘플링 설명 보완 및 하단 보너스 1개 완료·2개 미구현 기록
 2026-11-16 00:37 KST | unknown | 보너스 구현: TrainingMedianImputer·Train 내부 5크기×5-fold Learning Curve 구현, 전체 모델 재학습·PNG 6개·JSON·README 검증 통과
 2026-11-16 01:03 KST | unknown | 평가 보완 대책 작성: 16개 보완 아래 대책 추가, FAIL 13·15·16의 앙상블 해석·운영 판단·FP/FN 비용 및 임계값 조정 방안 구체화
+2026-11-16 01:15 KST | unknown | 평가 대책 16개 해결: 규칙 집계·F1 개선율·SMOTE/앙상블/운영비용 실험 및 리포트 자동대조 구현, 전체 CLI 검증 통과, 모델링 커밋 258b073
